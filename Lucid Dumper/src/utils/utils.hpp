@@ -1,11 +1,19 @@
 #pragma once
 #include <string>
+#include <iostream>
+#include <Windows.h>
+#include "ColorDef.h"
+#include <sstream>
+#include <thread>
+#include <vector>
+
 
 namespace Utils {
     // Console
     void ClearConsole();
     void PrintBanner();
     void SetConsoleProperties();
+	void BounceConsole();
 
     // Logging
     void LogError(const std::string& message);
