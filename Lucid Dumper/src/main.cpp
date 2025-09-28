@@ -3,8 +3,6 @@
 #include "utils/utils.hpp"
 #include "Offsets.h"
 
-using namespace Utils;
-
 void EnableVTMode() {
 	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hOut == INVALID_HANDLE_VALUE) return;
@@ -46,7 +44,7 @@ void GetFakeDatamodelPtr() {
                 ss << "Datamodel found at address: 0x"
                     << std::hex << std::uppercase << fakeDatamodelAddr
                     << " (offset: 0x" << offset << ")";
-                LogOffset(ss.str());
+                Utils::LogOffset(ss.str());
                 break;
             }
         }
@@ -69,10 +67,10 @@ void GetPlaceId() {
         placeIdOffset = (i - 1) * sizeof(uintptr_t);
         std::stringstream ss;
         ss << std::hex << placeIdOffset;
-        LogOffset("Place Id found at offset: 0x" + ss.str());
+        Utils::LogOffset("Place Id found at offset: 0x" + ss.str());
     }
     else {
-        LogError("GameID Not Found within" + std::to_string(maxOffset * sizeof(uintptr_t)) + " bytes");
+        Utils::LogError("GameID Not Found within" + std::to_string(maxOffset * sizeof(uintptr_t)) + " bytes");
     }
     Offsets::PlaceIDOffset = placeIdOffset;
 }
@@ -92,11 +90,11 @@ void GetGameId() {
         gameIdOffset = (i - 1) * sizeof(uintptr_t);
         std::stringstream ss;
         ss << std::hex << gameIdOffset;
-        LogOffset("Game Id found at offset: 0x" + ss.str());
+        Utils::LogOffset("Game Id found at offset: 0x" + ss.str());
 		Offsets::GameLoadedOffset = gameIdOffset;
     }
     else
-		LogError("GameID Not Found within" + std::to_string(maxOffset * sizeof(uintptr_t)) + " bytes");
+		Utils::LogError("GameID Not Found within" + std::to_string(maxOffset * sizeof(uintptr_t)) + " bytes");
     Offsets::PlaceIDOffset = gameIdOffset;
 }
 
@@ -112,7 +110,7 @@ void GetNameOffset() {
         {
             std::stringstream ss;
             ss << std::hex << nameOffset;
-			LogOffset("Name offset found at: 0x" + ss.str());
+			Utils::LogOffset("Name offset found at: 0x" + ss.str());
 			Offsets::NameOffset = nameOffset;
             break;
         } 
@@ -131,7 +129,7 @@ void GetGameLoaded() {
         {
             std::stringstream ss;
             ss << std::hex << GameLoadedOffset;
-            LogOffset("Game Loaded offset found at: 0x" + ss.str());
+            Utils::LogOffset("Game Loaded offset found at: 0x" + ss.str());
             break;
         }
         GameLoadedOffset++;
@@ -151,7 +149,7 @@ void GetWorkspace() {
         {
             std::stringstream ss;
             ss << std::hex << WorkspaceOffset;
-            LogOffset("Workspace offset found at: 0x" + ss.str());
+            Utils::LogOffset("Workspace offset found at: 0x" + ss.str());
             Offsets::WorkspaceOffset = WorkspaceOffset;
             break;
         }
@@ -172,16 +170,87 @@ void GetParentOffset() {
         if (ParentName == "Ugc" || ParentName == "LuaApp") {
             std::stringstream ss;
             ss << std::hex << ParentOffset;
-            LogOffset("Parent offset found at: 0x" + ss.str());
+            Utils::LogOffset("Parent offset found at: 0x" + ss.str());
             Offsets::ParentOffset = ParentOffset;
             return;
         }
         ParentOffset += 1;
     }
-    LogError("Parent Offset Wasn't Found");
+    Utils::LogError("Parent Offset Wasn't Found");
 
     
 }
+
+std::string GetName(uintptr_t Address) {
+    uintptr_t WorkSpaceNameAddr = Mem->Read<uintptr_t>(Address + Offsets::NameOffset);
+    return Mem->readstring(WorkSpaceNameAddr);
+
+}
+
+void DumpChildrenOffsets() {
+    uintptr_t ChildrenOffset = 0;
+    const uintptr_t maxScan = 0x100000;
+
+    while (ChildrenOffset < maxScan) {
+        uintptr_t childrenPtr = Mem->Read<uintptr_t>(Offsets::Datamodel + ChildrenOffset);
+        uintptr_t childrenEnd = Mem->Read<uintptr_t>(childrenPtr + 0x8);
+
+        // Debug: show each candidate offset
+        {
+            std::stringstream ss;
+            ss << "[SCAN] Offset=0x" << std::hex << ChildrenOffset
+                << " Ptr=0x" << childrenPtr
+                << " End=0x" << childrenEnd;
+            Utils::LogDebug(ss.str());
+        }
+
+        // Iterate possible children
+        for (auto child = Mem->Read<uintptr_t>(childrenPtr);
+            child < childrenEnd;
+            child += 0x10)
+        {
+            std::string ChildName = GetName(child);
+            if (ChildName == "")
+                continue;
+
+            // Debug: show each name read
+            {
+                std::stringstream ss;
+                ss << "   [CHILD] Addr=0x" << std::hex << child
+                  
+                    << " Name=\"" << ChildName << "\"";
+                Utils::LogDebug(ss.str());
+            }
+
+            if (ChildName == "Workspace") {
+                std::stringstream ss;
+                ss << std::hex << ChildrenOffset;
+                Utils::LogOffset("Children Start offset found at: 0x" + ss.str());
+                return;
+            }
+        }
+
+        ChildrenOffset++;
+    }
+
+    Utils::LogError("Children offset not found within scan limit");
+}
+
+
+std::vector<uintptr_t> GetChildren(uintptr_t Address)
+{
+    std::vector<uintptr_t> Instancechildren;
+
+    uintptr_t childrenptr = Mem->Read<uintptr_t>(Address + Offsets::ChildrenOffset);
+    uintptr_t childrenend = Mem->Read<uintptr_t>(childrenptr + 0x8);
+
+    for (auto child = Mem->Read<uintptr_t>(childrenptr); child < childrenend; child += 0x10) {
+        Instancechildren.push_back(Mem->Read<uintptr_t>(child));
+    }
+
+    return Instancechildren;
+}
+
 
 void GetClassDescriptor() {
     uintptr_t classDescOffset = 0;
@@ -193,7 +262,7 @@ void GetClassDescriptor() {
 
         if (className == "DataModel")
         {
-			LogOffset("Class Descriptor offset found at: 0x" + std::to_string(classDescOffset));
+			Utils::LogOffset("Class Descriptor offset found at: 0x" + std::to_string(classDescOffset));
             break;
         }
         classDescOffset++;
@@ -211,19 +280,20 @@ void GetOffsets() {
     GetWorkspace();
     GetParentOffset();
     GetClassDescriptor();
+    DumpChildrenOffsets();
 }
 
 #include <thread>
 int main() {
 	EnableVTMode();
-	SetConsoleProperties();
-	PrintBanner();
-	LogInfo("Initialising Memory");
+    Utils::SetConsoleProperties();
+    Utils::PrintBanner();
+	Utils::LogInfo("Initialising Memory");
 	if (!Mem->Attach()) {
 
 		return -1;
 	}else {
-		LogSuccess("Successfully attached to process.\n\n");
+		Utils::LogSuccess("Successfully attached to process.\n\n");
 	}
     GetOffsets();
     std::cout << std::endl;

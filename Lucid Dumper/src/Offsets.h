@@ -6,8 +6,9 @@ namespace Offsets {
 	uintptr_t GameIdOffset;
 	uintptr_t NameOffset;
 	uintptr_t GameLoadedOffset;
-	uintptr_t ParentOffset;
+	uintptr_t ParentOffset, ChildrenOffset;
 	uintptr_t WorkspaceOffset;
+
 
 
 	// Manually Update
